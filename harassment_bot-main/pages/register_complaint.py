@@ -28,7 +28,9 @@ grievance_stage = 1
 
 st.title("Griveance Bot")
 
-
+if 'student_id' not in st.session_state:
+    st.session_state.student_id = 'N210132'
+    
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = chat_history
 
@@ -58,7 +60,7 @@ def submit_message():
 
 for i, (sender, message) in enumerate(st.session_state.chat_history):
     if sender == "System":
-        if i == 0:
+        if not i%2:
             st.chat_message("assistant").write(message)  
         else:
             st.chat_message("user").write(message)
@@ -67,15 +69,7 @@ for i, (sender, message) in enumerate(st.session_state.chat_history):
             st.chat_message("assistant").write(message)
         else:
             st.chat_message("user").write(message)
-       
-# for i, (sender, message) in enumerate(st.session_state.chat_history):
-#     if sender == "System":
-#         if i == 0:
-#             st.chat_message("assistant").write(message) 
-#         else:
-#             st.chat_message("assistant").write(message)
-#     else:
-#         st.chat_message("user").write(message)     
+
 
 
 st.text_input("Enter your message", key="input_message", on_change=submit_message)
@@ -83,3 +77,4 @@ st.text_input("Enter your message", key="input_message", on_change=submit_messag
 
 rate_limit = 60 
 api_calls_counter = Counter()  
+

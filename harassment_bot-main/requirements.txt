@@ -134,3 +134,4 @@ pymongo
 gridfs 
 markdown 
 weasyprint
+streamlit_elements

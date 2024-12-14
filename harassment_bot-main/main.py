@@ -21,8 +21,6 @@ def set_bg_hack_url():
 
 set_bg_hack_url()
 
-st.balloons()
-
 css = """
 <style>
 hr {

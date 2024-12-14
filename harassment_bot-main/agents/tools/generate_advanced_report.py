@@ -1,12 +1,14 @@
 from langchain.tools import tool
 from langchain import LLMChain, PromptTemplate
 import pymongo 
+import pandas as pd
 from pymongo.mongo_client import MongoClient
 uri = "mongodb+srv://saikiranpatnana:mayya143@saikiran.bdu0jbl.mongodb.net/?retryWrites=true&w=majority&appName=saikiran"
 client=MongoClient(uri)
 db=client.test
 collection=db['harassment_register']
 from markdown import markdown
+import streamlit as st
 from weasyprint import HTML
 from gridfs import GridFS
 from config import llm
@@ -17,11 +19,22 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.pydantic_v1 import BaseModel, Field
 
-class InfoExtractor(BaseModel):
-    student_id : str = Field(description="Indicates 6th digits student id starting with N.")
-    level: str = Field(description="The next question to ask the user for collecting more information.")
-    
-structured_llm = llm.with_structured_output(InfoExtractor)
+class LevelExtractor(BaseModel):
+    level_number: int = Field(description="Indicates the level number.")
+structured_llm = llm.with_structured_output(LevelExtractor)
+
+def extract_level(report: str) -> LevelExtractor:
+    prompt_template = f"""
+    You are an ai assistant tasked with extracting the level number about an incident from the given report.
+    report: {report}
+    Response Format:
+    {{
+        "level_number": 1/2/3/4
+    }}
+    """
+    structured_response = structured_llm.invoke(prompt_template)
+    return structured_response
+
 def store_to_db(report):
 
         # Prepare messages for the assistant
@@ -48,12 +61,13 @@ def store_to_db(report):
             pdf_id = fs.put(pdf_file, filename="output.pdf")
         print(f"PDF successfully stored in MongoDB with ID: {pdf_id}")
         tokens = []
+        level = extract_level(report).level_number
         for record in collection.find():
             tokens.append(record['token'])
         while True:
             random_token = np.random.randint(1000)
             if(random_token not in tokens):
-                collection.insert_one({'token' : random_token , 'pdf_id' : pdf_id, 'complaint' : report})
+                collection.insert_one({'student_id': st.session_state.student_id,'token' : random_token , 'pdf_id' : pdf_id, 'level': level, 'complaint' : report, 'reported_timestamp' : pd.Timestamp.now()})
             break
     
 def get_generate_advanced_report(llm):

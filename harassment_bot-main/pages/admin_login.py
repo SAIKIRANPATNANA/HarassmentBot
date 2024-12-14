@@ -1,18 +1,29 @@
 import streamlit as st
 import bcrypt
-from pymongo import MongoClient
 import re
 import pymongo 
 from pymongo.mongo_client import MongoClient
+from gridfs import GridFS
+import pandas as pd
+import numpy as np
+
 uri = "mongodb+srv://saikiranpatnana:mayya143@saikiran.bdu0jbl.mongodb.net/?retryWrites=true&w=majority&appName=saikiran"
 client=MongoClient(uri)
 db=client.test
-collection=db['harassment_admin']
+collection = db['harassement_admin']
+fs = GridFS(db)
 
 if "page" not in st.session_state:
     st.session_state["page"] = "Login" 
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
+    
+fs = GridFS(db)
+def retrieve_pdf(pdf_id):
+    pdf_data = fs.get(pdf_id)
+    with open('retrieved_output.pdf', 'wb') as file:
+        file.write(pdf_data.read())
+    print("PDF retrieved and saved as 'retrieved_output.pdf'")
 
 def navigate_to(page):
     st.session_state["page"] = page
@@ -40,16 +51,7 @@ def create_user(username, password):
 
 
 def login_user(username, password):
-    """
-    Authenticate the user by validating credentials.
-
-    Args:
-    - username (str): The input username.
-    - password (str): The input password.
-
-    Returns:
-    - dict: Result of authentication with success flag and message.
-    """
+  
     # Fetch user from MongoDB
     user = collection.find_one({"username": username})
     if not user:
@@ -75,7 +77,7 @@ def login_page():
             result = login_user(username, password)
             if result["success"]:
                 st.session_state["logged_in"] = True
-                st.session_state["username"] = username  # Store username for personalization
+                st.session_state["username"] = username 
                 st.success(result["message"])
                 navigate_to("Dashboard")
             else:
@@ -87,14 +89,6 @@ def login_page():
 
 
 def is_password_valid(password):
-    """
-    Validate the password against the complexity requirements.
-    - At least one uppercase letter.
-    - At least one lowercase letter.
-    - At least one digit.
-    - At least one special character.
-    - Minimum length of 8.
-    """
     if len(password) < 8:
         return "Password must be at least 8 characters long!"
     if not re.search(r"[A-Z]", password):
@@ -158,13 +152,62 @@ def admin_dashboard():
     if not st.session_state["logged_in"]:
         st.warning("You must log in to access the dashboard.")
         navigate_to("Login")
+        
     else:
         st.write("Welcome to the Admin Dashboard!")
+        rows = []
+    collection = db['harassment_register']
+    for record in collection.find():
+        if len(record.items()) == 7:
+            row = {
+                'STUDENT_ID': record.get('student_id', None),
+                'TOKEN' : record.get('token', None),
+                'LEVEL': record.get('level', None),
+                'REPORTED_TIMESTAMP': record.get('reported_timestamp', None),
+                'COMPLAINT_ID': record.get('pdf_id', None)
+                }
+            rows.append(row)
+    df = pd.DataFrame(rows)
+    print(df)
+    st.dataframe(rows,  use_container_width=True)
+    student_id = st.text_input("Enter the Student ID to get her Details:")
+    data = pd.read_csv('data.csv').set_index('ID_No')
+    if student_id:
+        if student_id in data.index and student_id in list(df['STUDENT_ID']):  # Check if the student_id exists in the index
+            student_data = data.loc[student_id]
+            
+            # Use an expander to show details
+            with st.expander(f"Details for Student ID: {student_id}", expanded=True):
+                st.write(f"**Name:** {student_data['Name']}")
+                st.write(f"**Course:** {student_data['Course']}")
+                st.write(f"**Branch:** {student_data['Branch']}")
+                st.write(f"**Year:** {student_data['Year']}")
+                st.write(f"**Mobile:** {student_data['Mobile']}")
+        else:
+            st.error("Student ID not found.")
 
-        if st.button("Log Out"):
-            st.session_state["logged_in"] = False
-            navigate_to("Login")
-
+    pdf_id = st.text_input("Enter the Complaint ID to download the complaint:")
+    if pdf_id:
+        pdf_ids = list(str(pdf_id) for pdf_id in df['COMPLAINT_ID'])
+        if pdf_id!= '' and pdf_id in pdf_ids:
+            # Retrieve the PDF
+            pdf_id_str = pdf_id
+            pdf_id = [id for id in df['COMPLAINT_ID'] if str(id) == pdf_id][0]
+            print(pdf_id, type(pdf_id))
+            retrieve_pdf(pdf_id)
+            
+            with open("retrieved_output.pdf", "rb") as file:
+                pdf_data = file.read()
+            
+            st.download_button(
+                label="Download Complaint PDF",
+                data=pdf_data,
+                file_name=f"{pdf_id_str}.pdf",
+                mime="application/pdf"
+            )
+        else:
+            st.error("Invalid Complaint ID!")
+            
 if st.session_state["page"] == "Login":
     login_page()
 elif st.session_state["page"] == "Signup":
