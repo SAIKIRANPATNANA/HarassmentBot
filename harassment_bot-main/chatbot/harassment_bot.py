@@ -1,5 +1,6 @@
 from agents.harassment_agent import generate_report
 import pandas as pd
+import streamlit as st
 import numpy as np
 from langchain_core.pydantic_v1 import BaseModel, Field
 import google.generativeai as genai
@@ -39,8 +40,8 @@ Your ultimate goal is to empower students to report incidents and contribute to 
 
 messages = {
     "welcome_message": "Hello! Welcome to the Griviance Chatbot. How can I help you ?",
-    "greet_user": "Nice to meet you, {username}! How can I assist you today?",
-    "ask_next_option": "Is this report covers the entire detail of the  harassment you have confronted with? If you need any changes feel free to suggest me the changes.",
+    "greet_user" : "Nice to meet you, {username}! How can I assist you today?",
+    "ask_next_option": "Is this report covers the entire detail of the  harassment you have confronted with? Be Brave! Hope your issue will be resolve ASAP. You can track the status of you complaint using this token",
     "end_chat": "Thank you for using the Harassment Reporting Chatbot.Your report has been recorded anonymously, and your identity is protected. If you need further assistance or wish to report another incident, please feel free to reach out. We are here to support you and ensure your safety at all times.",
     "invalid_option": "I'm sorry, I didn't understand that. Can you please clarify."
 }
@@ -66,7 +67,8 @@ def process_message(user_input, chat_history, context, harassment_stage, llm, pr
                 response = collect_harassment_info(context)
                 if response.is_complete:
                     report = generate_report(response.collected_info)
-                    response_text = report + f"\n\n{messages['ask_next_option']}"
+                    token = collection.find()
+                    response_text = report + f"\n\n{messages['ask_next_option'].format(st.session_state.token)}"
                 else:
                     response_text = response.next_question
                     harassment_stage = 3 
@@ -79,7 +81,7 @@ def process_message(user_input, chat_history, context, harassment_stage, llm, pr
             if response.is_complete:
                 report = generate_report(response.collected_info)
                 print(report)
-                response_text = report + f"\n\n{messages['ask_next_option']}"
+                response_text = report + f"\n\n{messages['ask_next_option']+f" {st.session_state.token}."}"
                 harassment_stage = 13  
             else:
                 response_text = response.next_question
@@ -92,7 +94,7 @@ def process_message(user_input, chat_history, context, harassment_stage, llm, pr
             else:
                 response_text = messages["end_chat"]
                 harassment_stage = 0 
-
+      
         
 
         print(context)

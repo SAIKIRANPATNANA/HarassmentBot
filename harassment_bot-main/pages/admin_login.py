@@ -6,6 +6,7 @@ from pymongo.mongo_client import MongoClient
 from gridfs import GridFS
 import pandas as pd
 import numpy as np
+from bson.objectid import ObjectId
 
 uri = "mongodb+srv://saikiranpatnana:mayya143@saikiran.bdu0jbl.mongodb.net/?retryWrites=true&w=majority&appName=saikiran"
 client=MongoClient(uri)
@@ -156,20 +157,71 @@ def admin_dashboard():
     else:
         st.write("Welcome to the Admin Dashboard!")
         rows = []
+        
     collection = db['harassment_register']
+    status_mapping = {0: "📑 REPORTED", 1: "⏳ REVIEWED", 2: "✅ RESOLVED"}
+    rows = []
+
+    # Fetch data and populate DataFrame
     for record in collection.find():
-        if len(record.items()) == 7:
+        if len(record.items()) == 8:  # Adjust this condition as needed
             row = {
                 'STUDENT_ID': record.get('student_id', None),
-                'TOKEN' : record.get('token', None),
                 'LEVEL': record.get('level', None),
                 'REPORTED_TIMESTAMP': record.get('reported_timestamp', None),
-                'COMPLAINT_ID': record.get('pdf_id', None)
-                }
+                'COMPLAINT_ID': str(record.get('pdf_id', None)),  # Convert to string for comparison
+                'STATUS': status_mapping.get(record.get('status', None), "📑 REPORTED")  # Default to REPORTED
+            }
             rows.append(row)
+
     df = pd.DataFrame(rows)
-    print(df)
-    st.dataframe(rows,  use_container_width=True)
+
+    # Editable data editor
+    edited_df = st.data_editor(
+        df,
+        column_config={
+            "STATUS": st.column_config.SelectboxColumn(
+                "PROGRESS STAGE",
+                help="The Progress Stage of the Complaint",
+                width="medium",
+                options=[
+                    "📑 REPORTED",
+                    "⏳ REVIEWED",
+                    "✅ RESOLVED",
+                ],
+                required=True,
+            )
+        },
+        hide_index=True,
+    )
+
+    # Debugging statements
+    print('Original df:', df)
+    print('Edited df:', edited_df)
+
+    # Detect changes
+    if not df.equals(edited_df):
+        reverse_mapping = {v: k for k, v in status_mapping.items()}
+        for index, row in edited_df.iterrows():
+            if row["STATUS"] != df.loc[index, "STATUS"]:
+                # Update the MongoDB document
+                pdf_id = row["COMPLAINT_ID"]
+                new_status = reverse_mapping[row["STATUS"]]  # Map emoji to numeric
+                print(f"Updating pdf_id: {pdf_id} to new status: {new_status}")
+
+                try:
+                    result = collection.update_one(
+                        {"pdf_id": ObjectId(pdf_id)},  # Use ObjectId if pdf_id is stored as ObjectId
+                        {"$set": {"status": new_status}}
+                    )
+
+                    if result.modified_count > 0:
+                        st.success(f"Complaint ID {pdf_id} updated successfully!")
+                    else:
+                        st.warning(f"No update made for Complaint ID {pdf_id}.")
+                except Exception as e:
+                    st.error(f"Error updating Complaint ID {pdf_id}: {e}")
+
     student_id = st.text_input("Enter the Student ID to get her Details:")
     data = pd.read_csv('data.csv').set_index('ID_No')
     if student_id:
@@ -194,11 +246,10 @@ def admin_dashboard():
             pdf_id_str = pdf_id
             pdf_id = [id for id in df['COMPLAINT_ID'] if str(id) == pdf_id][0]
             print(pdf_id, type(pdf_id))
+            pdf_id = ObjectId(pdf_id)
             retrieve_pdf(pdf_id)
-            
             with open("retrieved_output.pdf", "rb") as file:
                 pdf_data = file.read()
-            
             st.download_button(
                 label="Download Complaint PDF",
                 data=pdf_data,

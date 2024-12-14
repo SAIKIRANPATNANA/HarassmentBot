@@ -67,7 +67,9 @@ def store_to_db(report):
         while True:
             random_token = np.random.randint(1000)
             if(random_token not in tokens):
-                collection.insert_one({'student_id': st.session_state.student_id,'token' : random_token , 'pdf_id' : pdf_id, 'level': level, 'complaint' : report, 'reported_timestamp' : pd.Timestamp.now()})
+                if "token" not in st.session_state:
+                    st.session_state["token"] = random_token             
+                collection.insert_one({'student_id': st.session_state.student_id,'token' : random_token , 'pdf_id' : pdf_id, 'level': level, 'complaint' : report, 'reported_timestamp' : pd.Timestamp.now(), 'status':0})
             break
     
 def get_generate_advanced_report(llm):
